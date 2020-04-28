@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+
+### BEGIN_COMMON
+#!/usr/bin/env bash
+
+fatal() {
+    echo fatal: "$@" >&2
+    exit 1
+}
+
+info() {
+    echo info: "$@"
+}
+
+print_files() {
+    [[ $# != 1 ]] || return
+    info $1
+    shift
+    for i; do
+        info "  $i"
+    done
+}
+
+trim()
+{
+    trimmed=$1
+    trimmed=${trimmed%% }
+    trimmed=${trimmed## }
+    echo $trimmed
+}
+
+if [ "$SKIPSONARLINT" ]; then
+    info "SKIPSONARLINT is set, skipping verification..."
+    exit 0
+fi
+
+release=2.2-SNAPSHOT
+sonarlint=~/sonarlint-cli-2.2-SNAPSHOT/bin/sonarlint
+
+if ! type $sonarlint &>/dev/null; then
+    echo "fatal: cannot find 'sonarlint' on PATH"
+    echo "See setup steps in https://github.com/fufengchang/sonarlint-git-hooks.git"
+    exit 1
+fi
+
+run() {
+    sources=()
+    sources_globs=
+    tests=()
+    tests_globs=
+    for file; do
+        if ! [ -f "$file" ]; then
+            info "skip deleted file: $file"
+            continue
+        fi
+        if [[ $file == *src/* ]]; then
+            if [[ $file == *[tT]est* || $file == *IT* ]]; then
+                tests+=("$file")
+                tests_globs="$tests_globs,$file"
+            else
+                sources+=("$file")
+            fi
+            sources_globs="$sources_globs,$file"
+            continue
+        fi
+        info "skip unknown file: $file"
+    done
+
+    if [ ${#sources} = 0 -a ${#tests} = 0 ]; then
+        info no files to analyze
+        return 2
+    fi
+
+    args=(--src "{${sources_globs:1}}")
+    test "$tests_globs" && args+=(--tests "{${tests_globs:1}}")
+
+    print_files "source files to analyze:" "${sources[@]}"
+    print_files "test files to analyze:" "${tests[@]}"
+    info "analyzing..."
+ 
+
+	issues=$($sonarlint "${args[@]}" | sed -ne '/SonarLint Detail/,/^---/p' | sed '$d')
+	
+	OLD_IFS="$IFS"
+	IFS=$'\n' 
+	
+	status=()
+	for line in  $(git status -suno | sed '/^ /d')
+	do
+		status+=("${line}")
+	done
+	IFS=${OLD_IFS}
+	
+	declare -A code_changes=()
+	
+	for(( i=0;i<${#status[@]};i++)) 
+	do
+		if [[ ${status[i]} =~ ^M.* ]]
+		then
+			blame_args=("-n" "${status[i]:3}")
+			line_nos=$(git blame "${blame_args[@]}" | sed -n '/00000000/p' | sed -e 's/(.*//g' -e 's/00000000 //g')
+			code_changes+=(["${status[i]:3}"]="${line_nos}")
+		elif [[ ${status[i]} =~ ^A.* ]]
+		then
+			file_name=$(trim ${status[i]:3})
+			total=$(wc -l ${file_name} | sed 's/ .*//g')
+			line_nos=$(seq 1 ${total})
+			code_changes+=(["${status[i]:3}"]="${line_nos}")
+		elif [[ ${status[i]} =~ ^R.* || ${status[i]} =~ ^C.* ]]
+		then
+			file_names=${status[i]:3}
+			old_name=$(trim ${file_names%-*})
+			new_name=$(trim ${file_names#*>})
+			blame_args=("-n" "--contents" "${new_name}" "--" "${old_name}")
+			line_nos=$(git blame "${blame_args[@]}" | sed -n '/00000000/p' | sed -e 's/(.*//g' -e 's/00000000.*java\s*//g')
+			code_changes+=(["${new_name}"]="${line_nos}")
+		fi
+	done;
+	
+	for file_name in "${!code_changes[@]}" 
+	do   
+		code_changes[$file_name]=","$(echo ${code_changes[$file_name]} | xargs | sed 's/ /,/g')","
+	done 
+	
+	OLD_IFS="$IFS"
+	IFS=$'\n' 
+
+	original_content=()
+	declare -A file_indexs=()
+	declare -A issue_details=()
+	issue_count=0
+	current_file_index=
+	issue_id=
+
+	# read sonarlint report to array
+	for line in ${issues}
+	do 
+		original_content+=("${line}")
+	done
+
+	# create a issue array
+	for line in ${original_content[@]}
+	do
+		if [[ "${line:0:3}" == "@#@" ]]
+		then
+			current_file_index="${line:3}"
+			file_indexs+=(["${line:3}"]="")
+		elif [[ "${line:0:3}" == "#@#" ]]
+		then
+			issue_id=""
+			line_no=${line:3}
+			line_no=${line_no#*[}
+			line_no=${line_no%]*}
+			if [[ ${code_changes[${current_file_index}]} =~ ","$line_no"," ]]
+			then
+				issue_id="issue_"${line_no}"_"${issue_count}
+				file_indexs[$current_file_index]=${file_indexs["${current_file_index}"]}" ${issue_id}"
+				let issue_count++
+			fi
+		else
+			if [[ -n "${issue_id}" ]]
+			then
+				issue_details[$issue_id]="${issue_details[${issue_id}]}""${line}\n"
+			fi
+		fi
+	done
+
+	IFS=${OLD_IFS}
+	
+
+	for key in ${!file_indexs[@]}
+	do
+		if [[ -n ${file_indexs[${key}]} ]]
+		then
+			echo ${key}
+		fi
+
+		for issue_id in ${file_indexs[${key}]}
+		do	
+			if [[ -n ${issue_details[${issue_id}]} ]]
+			then
+				echo ${issue_id}
+				echo -e ${issue_details[${issue_id}]}
+			fi
+		done
+	done	
+	
+	if [[ ${#issue_details[@]} != 0 ]]; then
+        fatal "hook abort: some analyses have failed"
+    fi
+}
+
+### END_COMMON
+
+files=($(git diff --name-only --diff-filter=AMR --cached HEAD))
+if run "${files[@]}"; then
+    if ! git diff --check --cached; then
+        fatal 'hook abort: `git diff --check` reports issues'
+    fi
+
+    cat << "EOF"
+  _______     ______      ______    ________            ___    ______    _______
+ /" _   "|   /    " \    /    " \  |"      "\          |"  |  /    " \  |   _  "\
+(: ( \___)  // ____  \  // ____  \ (.  ___  :)         ||  | // ____  \ (. |_)  :)
+ \/ \      /  /    ) :)/  /    ) :)|: \   ) ||         |:  |/  /    ) :)|:     \/
+ //  \ ___(: (____/ //(: (____/ // (| (___\ ||      ___|  /(: (____/ // (|  _  \\
+(:   _(  _|\        /  \        /  |:       :)     /  :|_/ )\        /  |: |_)  :)
+ \_______)  \"_____/    \"_____/   (________/     (_______/  \"_____/   (_______/
+
+EOF
+fi
