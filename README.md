@@ -12,11 +12,11 @@ sonarlint-git-hooks: https://github.com/fufengchang/sonarlint-git-hooks.git
 #### 5. execute install.sh to install 'pre-commit' to git hooks
     ./install.sh
    when you execute install.sh, will prompt you to input a git repository path,
-   for example, "C:\git\ACL\tms_suppliersystem_oocl" or "/c/git/ACL/tms_suppliersystem_oocl"
-#### 6. if you want to uninstall 'pre-commit' to your git hooks,
-####    you can execute uninstall.sh
+   for example, "C:\git\apache\jawr-core\" or "/c/git/apache/jawr-core/"
+#### 6. verify install success
+![avatar](https://raw.githubusercontent.com/fufengchang/sonarlint-git-hooks/master/image/2020-04-30 15_53_38-hooks.png)
+#### 7. if you want to uninstall 'pre-commit' to your git hooks,you can execute uninstall.sh
     ./uninstall.sh
-
 
 
 
