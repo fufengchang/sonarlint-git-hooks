@@ -6,7 +6,7 @@ sonarlint-git-hooks: https://github.com/fufengchang/sonarlint-git-hooks.git
 #### 2. cd to the sonarlint-git-hooks folder
     cd sonarlint-git-hooks
 #### 3. start a git bash terminal
-![avatar](./image/2020-04-30 14_46_40-sonarlint-git-hooks.png)
+![avatar](https://raw.githubusercontent.com/fufengchang/sonarlint-git-hooks/master/image/2020-04-30%2014_46_40-sonarlint-git-hooks.png)
 #### 4. execute get-and-setup-sonarlint.sh to setup sonarlint-cli
     ./get-and-setup-sonarlint.sh
 #### 5. execute install.sh to install 'pre-commit' to git hooks
