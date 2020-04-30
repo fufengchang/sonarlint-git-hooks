@@ -14,7 +14,7 @@ sonarlint-git-hooks: https://github.com/fufengchang/sonarlint-git-hooks.git
    when you execute install.sh, will prompt you to input a git repository path,
    for example, "C:\git\apache\jawr-core\" or "/c/git/apache/jawr-core/"
 #### 6. verify install success
-![avatar](https://raw.githubusercontent.com/fufengchang/sonarlint-git-hooks/master/image/2020-04-30%15_53_38-hooks.png)
+![avatar](https://raw.githubusercontent.com/fufengchang/sonarlint-git-hooks/master/image/2020-04-30%2015_53_38-hooks.png)
 #### 7. if you want to uninstall 'pre-commit' to your git hooks,you can execute uninstall.sh
     ./uninstall.sh
 
