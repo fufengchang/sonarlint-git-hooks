@@ -194,10 +194,6 @@ run() {
 
 files=($(git diff --name-only --diff-filter=AMR --cached HEAD))
 if run "${files[@]}"; then
-    if ! git diff --check --cached; then
-        fatal 'hook abort: `git diff --check` reports issues'
-    fi
-
     cat << "EOF"
   _______     ______      ______    ________            ___    ______    _______
  /" _   "|   /    " \    /    " \  |"      "\          |"  |  /    " \  |   _  "\
